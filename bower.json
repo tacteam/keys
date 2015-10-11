@@ -2,9 +2,9 @@
   "name": "tac-keys",
   "version": "0.0.1",
   "authors": [
-    "alejandrocastrounqui <alejandrocastrounqui@gmail.com>"
+    "tacteam <tacteamunq@gmail.com>"
   ],
-  "description": "angular keyboard navigation components",
+  "description": "component to manage keyboard and remote-control events",
   "main": "dist/keys.js",
   "keywords": [
     "angular",
