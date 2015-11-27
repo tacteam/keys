@@ -2,7 +2,7 @@
   'use strict';
   angular.module('module.tac.keys', []).service('tac.keys', [
     function() {
-      var Control, ctrlkeycodes, get_ctrlkeycode, get_if_number, get_keycode, handler, keycodes, listeners, listeners_stack, make_ctrl, make_normal, make_number;
+      var Control, broadcast, ctrlkeycodes, dump, get_ctrlkeycode, get_if_letter, get_if_number, get_keycode, get_keyupcode, handler, keycodes, keyupcodes, listeners, listeners_stack, make_ctrl, make_letter, make_normal, make_number, remove, unknow;
       listeners = [];
       listeners_stack = [];
       keycodes = [
@@ -11,17 +11,25 @@
           code: 13,
           stop: true
         }, {
+          key: 'back_space',
+          code: 8,
+          stop: true
+        }, {
           key: 'left',
-          code: 37
+          code: 37,
+          stop: true
         }, {
           key: 'up',
-          code: 38
+          code: 38,
+          stop: true
         }, {
           key: 'right',
-          code: 39
+          code: 39,
+          stop: true
         }, {
           key: 'down',
-          code: 40
+          code: 40,
+          stop: true
         }, {
           key: 'info',
           code: 457
@@ -82,6 +90,33 @@
         }, {
           key: 'anterior',
           code: 413
+        }, {
+          key: 'caps_lock',
+          code: 20
+        }, {
+          key: 'space_bar',
+          code: 32
+        }, {
+          key: 'shift',
+          code: 16
+        }, {
+          key: 'alt',
+          code: 18
+        }, {
+          key: 'acute',
+          code: 219
+        }, {
+          key: 'alt_gr',
+          code: 225
+        }
+      ];
+      keyupcodes = [
+        {
+          key: 'shift',
+          code: 16
+        }, {
+          key: 'alt_gr',
+          code: 225
         }
       ];
       ctrlkeycodes = [
@@ -123,12 +158,34 @@
           code: 66
         }
       ];
+      remove = function(collection, elem) {
+        var elem_index;
+        elem_index = collection.indexOf(elem);
+        return (elem_index > -1) && collection.splice(elem_index, 1);
+      };
+      make_letter = function(letter) {
+        return {
+          is_letter: true,
+          key: 'letter',
+          letter: letter
+        };
+      };
       make_number = function(number) {
         return {
           is_number: true,
           key: 'number',
           number: number
         };
+      };
+      get_if_letter = function(code) {
+        var value;
+        if (code === 192) {
+          return make_letter('ñ');
+        }
+        if (code >= 65 && code <= 90) {
+          value = String.fromCharCode(code + 32);
+          return make_letter(value);
+        }
       };
       get_if_number = function(code) {
         if (code >= 48 && code <= 57) {
@@ -146,7 +203,16 @@
             return keycode;
           }
         }
-        return get_if_number(code);
+        return (get_if_number(code)) || (get_if_letter(code));
+      };
+      get_keyupcode = function(code) {
+        var keycode, _i, _len;
+        for (_i = 0, _len = keyupcodes.length; _i < _len; _i++) {
+          keycode = keyupcodes[_i];
+          if (keycode.code === code) {
+            return keycode;
+          }
+        }
       };
       get_ctrlkeycode = function(code) {
         var keycode, _i, _len;
@@ -157,53 +223,72 @@
           }
         }
       };
+      broadcast = function(code) {
+        var listener, _i, _len, _results;
+        _results = [];
+        for (_i = 0, _len = listeners.length; _i < _len; _i++) {
+          listener = listeners[_i];
+          _results.push(listener.handle(code));
+        }
+        return _results;
+      };
+      unknow = function(code) {
+        console.log('unregistered key ' + code);
+        return {
+          key: 'unknow',
+          value: code
+        };
+      };
+      dump = function() {
+        var listener, _i, _len, _results;
+        _results = [];
+        for (_i = 0, _len = listeners.length; _i < _len; _i++) {
+          listener = listeners[_i];
+          _results.push(listener.dump && listener.dump());
+        }
+        return _results;
+      };
       make_normal = function(owner) {
         return {
           onkeydown: function(event) {
-            var keycode, listener, _i, _len;
+            var keycode;
             if (event.keyCode === 17) {
               return owner.current = owner.ctrl;
             } else {
-              keycode = get_keycode(event.keyCode);
-              if (keycode) {
-                for (_i = 0, _len = listeners.length; _i < _len; _i++) {
-                  listener = listeners[_i];
-                  listener.handle(keycode);
-                }
-                if (keycode.stop) {
-                  return event.preventDefault();
-                }
-              } else {
-                return console.log('unregistered key ' + event.keyCode);
+              keycode = (get_keycode(event.keyCode)) || (unknow(event.keyCode));
+              broadcast(keycode);
+              if (keycode.stop && !owner.allow_default_once) {
+                event.preventDefault();
               }
+              owner.allow_default_once && (owner.allow_default_once = false);
+              return true;
             }
-          },
-          onkeyup: function(event) {}
+          }
         };
       };
       make_ctrl = function(owner) {
         return {
           onkeydown: function(event) {
-            var keycode, listener, _i, _len;
+            var keycode;
             keycode = get_ctrlkeycode(event.keyCode);
             if (keycode) {
-              for (_i = 0, _len = listeners.length; _i < _len; _i++) {
-                listener = listeners[_i];
-                listener.handle(keycode);
-              }
+              broadcast(keycode);
               return event.preventDefault();
             } else {
-              return console.log('unregistered key ' + event.keyCode);
-            }
-          },
-          onkeyup: function(event) {
-            if (event.keyCode === 17) {
-              return owner.current = owner.normal;
+              if (event.keyCode === 68) {
+                console.log('dumping');
+                event.preventDefault();
+                return dump();
+              } else {
+                return console.log('unregistered key ' + event.keyCode);
+              }
             }
           }
         };
       };
-      handler = {};
+      handler = {
+        allow_default_once: false
+      };
       handler.normal = make_normal(handler);
       handler.ctrl = make_ctrl(handler);
       handler.current = handler.normal;
@@ -213,12 +298,12 @@
         Control.subscribe = function(listener) {
           listeners.push(listener);
           return function() {
-            return unsubscribe(listener);
+            return remove(listeners, listener);
           };
         };
 
         Control.unsubscribe = function(listener) {
-          return _.remove(listeners, listener);
+          return remove(listeners, listener);
         };
 
         Control.create_level = function() {
@@ -234,12 +319,24 @@
           }
         };
 
+        Control.allow_default_once = function() {
+          return handler.allow_default_once = true;
+        };
+
         Control.bind_keydown = function(scope) {
           scope.onkeydown = function(event) {
             return handler.current.onkeydown(event);
           };
           return scope.onkeyup = function(event) {
-            return handler.current.onkeyup(event);
+            var keycode;
+            if (event.keyCode === 17) {
+              handler.current = handler.normal;
+            }
+            keycode = get_keyupcode(event.keyCode);
+            if (keycode) {
+              keycode.disable = true;
+              return broadcast(keycode);
+            }
           };
         };
 
