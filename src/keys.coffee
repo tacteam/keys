@@ -5,6 +5,7 @@ angular.module('module.tac.keys', [])
 .service('tac.keys', [
   () ->
     
+    #must crete level to add listeners
     listeners = []
     listeners_stack = []
     
@@ -13,17 +14,25 @@ angular.module('module.tac.keys', [])
         code: 13
         stop: true
       ,
+        key: 'back_space'
+        code: 8
+        stop: true
+      ,
         key: 'left'
         code: 37
+        stop: true
       ,
         key: 'up'
         code: 38
+        stop: true
       ,
         key: 'right'
         code: 39
+        stop: true
       ,
         key: 'down'
         code: 40
+        stop: true
       ,
         key: 'info'
         code: 457
@@ -84,6 +93,32 @@ angular.module('module.tac.keys', [])
       ,
         key: 'anterior'
         code: 413
+      ,
+        key: 'caps_lock'
+        code: 20 
+      ,
+        key: 'space_bar'
+        code: 32
+      ,
+        key: 'shift'
+        code: 16
+      ,
+        key: 'alt'
+        code: 18
+      ,
+        key: 'acute'
+        code: 219
+      ,
+        key: 'alt_gr'
+        code: 225
+      ]
+    
+    keyupcodes = [
+        key: 'shift'
+        code: 16
+      ,
+        key: 'alt_gr'
+        code: 225
       ]
     
     ctrlkeycodes = [
@@ -123,12 +158,28 @@ angular.module('module.tac.keys', [])
         key: 'blue'
         code: 66 #keyboard B
     ]
+    
+    remove = (collection, elem)->
+      elem_index = collection.indexOf(elem)
+      (elem_index > -1) and collection.splice(elem_index, 1)
+      
+    make_letter = (letter)->
+      is_letter: true
+      key: 'letter'
+      letter: letter
       
     make_number = (number)->
       is_number: true
       key: 'number'
       number: number
       
+    get_if_letter = (code)->
+      if code is 192
+        return make_letter 'ñ'
+      if code >= 65 and code <= 90
+        value = String.fromCharCode(code + 32)
+        return make_letter value
+        
     get_if_number = (code)->
       if code >= 48 and code <= 57
         return make_number code - 48
@@ -139,47 +190,59 @@ angular.module('module.tac.keys', [])
       for keycode in keycodes
         if keycode.code is code
           return keycode
-      return get_if_number code
+      return (get_if_number code) or (get_if_letter code)
       
+    get_keyupcode = (code)->
+      for keycode in keyupcodes
+        if keycode.code is code
+          return keycode
+          
     get_ctrlkeycode = (code)->
       for keycode in ctrlkeycodes
         if keycode.code is code
           return keycode
+    
+    broadcast = (code)->
+      for listener in listeners
+        listener.handle code
+        
+    unknow = (code)->
+      console.log 'unregistered key ' + code
+      key: 'unknow'
+      value: code
+      
+    dump = ->
+      for listener in listeners
+        listener.dump and listener.dump()
           
     make_normal = (owner)->
       onkeydown: (event)->
-        #console.log 'normal onkeydown ' + event.keyCode
         if event.keyCode is 17
           owner.current = owner.ctrl
         else
-          keycode = get_keycode(event.keyCode)
-          if keycode
-            for listener in listeners
-              listener.handle keycode
-            if keycode.stop
-              event.preventDefault()
-          else
-            console.log 'unregistered key ' + event.keyCode
-      onkeyup: (event)->
-        #console.log 'normal onkeyup ' + event.keyCode
-        
-            
+          keycode = (get_keycode event.keyCode) or (unknow event.keyCode)
+          broadcast keycode
+          if keycode.stop and not owner.allow_default_once
+            event.preventDefault()
+          owner.allow_default_once and (owner.allow_default_once = false)
+          true
+    
     make_ctrl = (owner)->
       onkeydown: (event)->
-        #console.log 'ctrl onkeydown ' + event.keyCode
         keycode = get_ctrlkeycode(event.keyCode)
         if keycode
-          for listener in listeners
-            listener.handle keycode
+          broadcast keycode
           event.preventDefault()
         else
-          console.log 'unregistered key ' + event.keyCode
-      onkeyup: (event)->
-        #console.log 'ctrl onkeyup ' + event.keyCode
-        if event.keyCode is 17
-          owner.current = owner.normal
-    
-    handler = {}
+          if event.keyCode is 68
+            console.log 'dumping'
+            event.preventDefault()
+            dump()
+          else
+            console.log 'unregistered key ' + event.keyCode
+        
+          
+    handler = allow_default_once:false
     handler.normal  = make_normal(handler)
     handler.ctrl    = make_ctrl(handler)
     handler.current = handler.normal
@@ -188,10 +251,10 @@ angular.module('module.tac.keys', [])
       
       @subscribe = (listener)->
         listeners.push listener
-        -> unsubscribe listener
+        -> remove listeners, listener
       
       @unsubscribe = (listener)->
-        _.remove listeners, listener
+        remove listeners, listener
         
       @create_level = ()->
         listeners_stack.push listeners
@@ -203,13 +266,21 @@ angular.module('module.tac.keys', [])
         else
           console.error "trying to pop unique listener array from listeners_stack"
       
+      @allow_default_once = ->
+        handler.allow_default_once = true
+        
+      
       @bind_keydown = (scope) ->
         scope.onkeydown = (event) ->
           handler.current.onkeydown event
-            
+        
         scope.onkeyup = (event) ->
-          handler.current.onkeyup event
+          if event.keyCode is 17
+            handler.current = handler.normal
+          keycode = get_keyupcode event.keyCode
+          if keycode
+            keycode.disable = true
+            broadcast keycode
           
-      
       
 ])
